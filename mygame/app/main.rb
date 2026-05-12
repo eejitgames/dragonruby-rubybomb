@@ -269,7 +269,7 @@ class Game < LowrezGame
       player_shot(-3, -0.8)
       player_shot(5, 0.8)
     elsif @shot_power >= 3
-      player_shot(2)
+      player_shot(1)
       player_shot(-3, -0.8)
       player_shot(5, 0.8)
     elsif @shot_power >= 2
