@@ -10,6 +10,7 @@ class Game < LowrezGame
   MAX_SHOT_POWER = 4
   PICKUP_SPRITES = { heart: 13, powerup: 100 }
   ENEMY_BULLET_ANI = [32, 33, 34, 33]
+  MAX_ENEMY_FIRE_SFX_PER_FRAME = 2
   BOSS_FOUR_ANGLES = [0, 0, 0.25, 0.5, 0.75]
   BLINK_COLORS = [5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 6, 6, 7, 7, 6, 6, 5]
   WHITE = [255, 255, 255]
@@ -150,6 +151,8 @@ class Game < LowrezGame
     @flame_sprite = 5
     @flame_timer = 0
     @next_fire = 0
+    @enemy_fire_sfx_frame = -1
+    @enemy_fire_sfx_count = 0
     @attack_frequency = 60
     @fire_frequency = 20
     @ship = sprite(x: center_x - 4, y: 90, spr: 2)
@@ -648,8 +651,20 @@ class Game < LowrezGame
     }
   end
 
-  def fire(enemy, angle, speed)
+  def enemy_fire_sfx
+    if @enemy_fire_sfx_frame != @time
+      @enemy_fire_sfx_frame = @time
+      @enemy_fire_sfx_count = 0
+    end
+
+    return if @enemy_fire_sfx_count >= MAX_ENEMY_FIRE_SFX_PER_FRAME
+
+    @enemy_fire_sfx_count += 1
     sfx("enemy_fire.wav", 0.5)
+  end
+
+  def fire(enemy, angle, speed)
+    enemy_fire_sfx
     bullet = enemy_bullet
     bullet.x = enemy.x + 3
     bullet.y = enemy.y + 6
