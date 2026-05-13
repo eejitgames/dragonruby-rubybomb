@@ -83,6 +83,7 @@ class Game < LowrezGame
 
   def initialize
     super(w: 256, h: 128)
+    @center_x = @w.idiv(2)
     @highscore = load_highscore
     @version = "v2"
     @buttons = {}
@@ -94,6 +95,7 @@ class Game < LowrezGame
     @shake = 0
     @flash = 0
     @sprite_paths = {}
+    @killed_enemies = []
     @cheatmode = false
     @ruby_cheat_armed = false
     @wave_cheat_armed = false
@@ -313,16 +315,19 @@ class Game < LowrezGame
   end
 
   def handle_collisions
-    killed_enemies = []
+    killed_enemies = @killed_enemies
+    killed_enemies.clear
 
     Array.each(@enemies) do |enemy|
       next if enemy.remove_me
+      next if enemy.ghost
 
       Array.each(@player_bullets) do |bullet|
         next if bullet.remove_me
         next if bullet.y >= enemy.y + enemy.colh
         next if bullet.y + bullet.colh <= enemy.y
-        next unless collide?(enemy, bullet)
+        next if bullet.x >= enemy.x + enemy.colw
+        next if bullet.x + bullet.colw <= enemy.x
 
         bullet.remove_me = true
         small_shockwave(bullet.x + bullet.colw / 2.0, bullet.y + bullet.colh / 2.0)
@@ -350,7 +355,6 @@ class Game < LowrezGame
         next if enemy_bullet.y + enemy_bullet.colh <= bullet.y
         next if enemy_bullet.x >= bullet.x + bullet.colw
         next if enemy_bullet.x + enemy_bullet.colw <= bullet.x
-        next unless collide?(enemy_bullet, bullet)
 
         enemy_bullet.remove_me = true
         @score += 500
@@ -360,9 +364,12 @@ class Game < LowrezGame
     end
     Array.reject!(@enemy_bullets) { |bullet| bullet.remove_me }
 
-    unless cheatmode?
-      ship_hit if @invulnerable <= 0 && Array.any?(@enemies) { |enemy| collide?(enemy, @ship) }
-      ship_hit if @invulnerable <= 0 && Array.any?(@enemy_bullets) { |bullet| collide?(bullet, @ship) }
+    if !cheatmode? && @invulnerable <= 0
+      if Array.any?(@enemies) { |enemy| collide?(enemy, @ship) }
+        ship_hit
+      elsif Array.any?(@enemy_bullets) { |bullet| collide?(bullet, @ship) }
+        ship_hit
+      end
     end
 
     Array.each(@pickups) do |pickup|
@@ -418,10 +425,11 @@ class Game < LowrezGame
 
   def place_enemies(rows)
     Array.each_with_index(rows) do |row, row_index|
+      spacing = (@w - 56).fdiv(row.length - 1)
       Array.each_with_index(row) do |type, column|
         next if type == 0
 
-        x = 24 + column * ((@w - 56).fdiv(row.length - 1))
+        x = 24 + column * spacing
         y = 4 + (row_index + 1) * 12
         spawn_enemy(type, x, y, (column + 1) * 3)
       end
@@ -836,7 +844,11 @@ class Game < LowrezGame
   end
 
   def make_stars
-    @stars = 75.map { { x: Numeric.rand(@w), y: Numeric.rand(@h), speed: rand * 1.5 + 0.5 } }
+    @stars = 75.map do
+      speed = rand * 1.5 + 0.5
+      color = speed < 1 ? 1 : (speed < 1.5 ? 13 : 6)
+      { x: Numeric.rand(@w), y: Numeric.rand(@h), speed: speed, color: color }
+    end
   end
 
   def animate_stars(speed = 1)
@@ -879,6 +891,7 @@ class Game < LowrezGame
     clear_lowrez_screen(@flash > 0 ? 2 : 0)
     @flash -= 1 if @flash > 0 && @advanced_frame
     apply_shake
+    @smooth_render = @effects_frame && (@mode == :game || @mode == :wave)
 
     case @mode
     when :start then render_start
@@ -890,8 +903,7 @@ class Game < LowrezGame
   end
 
   def clear_lowrez_screen(color)
-    r, g, b = PALETTE[color]
-    @screen.background_color = [r, g, b]
+    @screen.background_color = PALETTE[color]
   end
 
   def render_start
@@ -964,7 +976,7 @@ class Game < LowrezGame
   def render_object(object)
     x = object.x
     y = object.y
-    if object.smooth && @effects_frame && (@mode == :game || @mode == :wave)
+    if object.smooth && @smooth_render
       x += object.sx * 0.5
       y += object.sy * 0.5
     end
@@ -986,8 +998,7 @@ class Game < LowrezGame
 
   def render_stars
     Array.each(@stars) do |star|
-      color = star.speed < 1 ? 1 : (star.speed < 1.5 ? 13 : 6)
-      solid(star.x, star.y, 1, 1, color)
+      solid(star.x, star.y, 1, 1, star.color)
     end
   end
 
@@ -1037,10 +1048,26 @@ class Game < LowrezGame
   end
 
   def render_hud
-    label("score:#{score_text(@score)}", center_x - 24, 2, 12)
+    label(hud_score_text, center_x - 24, 2, 12)
     4.times { |i| draw_sprite(@lives >= i + 1 ? 13 : 14, i * 8 + 1, 1) }
     draw_sprite(48, @w - 20, 1)
-    label(@cherries.to_s, @w - 10, 2, 14)
+    label(hud_cherries_text, @w - 10, 2, 14)
+  end
+
+  def hud_score_text
+    if @hud_score_value != @score
+      @hud_score_value = @score
+      @hud_score_text = "score:#{@score}"
+    end
+    @hud_score_text
+  end
+
+  def hud_cherries_text
+    if @hud_cherries_value != @cherries
+      @hud_cherries_value = @cherries
+      @hud_cherries_text = @cherries.to_s
+    end
+    @hud_cherries_text
   end
 
   def apply_shake
@@ -1283,7 +1310,7 @@ class Game < LowrezGame
   end
 
   def center_x
-    @w.idiv(2)
+    @center_x
   end
 
   def attacker_right_edge

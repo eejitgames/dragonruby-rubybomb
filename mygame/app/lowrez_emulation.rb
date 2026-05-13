@@ -9,6 +9,8 @@ class LowrezGame
     @h = h
     @lowrez_background_color = [255, 255, 255]
     @viewport_primitive = { x: 0, y: 0, w: 1280, h: 720, path: :lowrez }
+    @zoom_x = 1280.fdiv(@w)
+    @zoom_y = 720.fdiv(@h)
   end
 
   def tick
@@ -32,11 +34,11 @@ class LowrezGame
   end
 
   def zoom_x
-    1280.fdiv(@w)
+    @zoom_x
   end
 
   def zoom_y
-    720.fdiv(@h)
+    @zoom_y
   end
 
   def viewport_primitive
